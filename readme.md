@@ -1,3 +1,12 @@
+<p align="center">
+  <img src="logo.png" alt="Google Keep to Notion Logo" width="150"/>
+</p>
+
+<h1 align="center">Google Keep to Notion Converter</h1>
+
+<p align="center">Convert Google Keep notes to Markdown and HTML with OCR and ChatGPT support.</p>
+
+
 # Google Keep to Notion Converter
 
 Convert your exported Google Keep notes (from Google Takeout) into clean, import-ready Markdown and HTML files for use in Notion — complete with OCR image processing and optional ChatGPT formatting.
