@@ -1,0 +1,21 @@
+# Virtual environments
+venv/
+.env/
+
+# Output data
+cache/
+output_html*/
+output_markdown/
+Keep/
+gkeep/
+
+# Original export
+archive_browser.html
+
+# Script drafts / earlier versions
+translate_gkeep_mk*.py
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.log
