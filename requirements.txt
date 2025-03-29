@@ -1,0 +1,5 @@
+aiohttp
+openai
+pytesseract
+pillow
+python-dotenv
