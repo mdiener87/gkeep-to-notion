@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # Load environment variables (if needed)
 load_dotenv()
 
-DEBUG_MODE = False          # When True, process only a few files for debugging
+DEBUG_MODE = True          # When True, process only a few files for debugging
 DEBUG_FILE_COUNT = 15       # Number of files to process in debug mode
 
 # Define output folders
@@ -23,7 +23,7 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 os.makedirs("output_html", exist_ok=True)
 
 # Toggle for enabling/disabling ChatGPT API
-USE_CHATGPT = False  # Set to True to enable ChatGPT processing, False for OCR only
+USE_CHATGPT = True  # Set to True to enable ChatGPT processing, False for OCR only
 
 # OpenAI API Key (make sure this is set in your environment)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -35,7 +35,7 @@ CHATGPT_CACHE_FOLDER = "chatgpt_cache"
 os.makedirs(CHATGPT_CACHE_FOLDER, exist_ok=True)
 
 # Define semaphore for limiting OCR concurrency (adjust the limit as needed)
-OCR_SEMAPHORE_LIMIT = 6
+OCR_SEMAPHORE_LIMIT = 4  # Adjust based on your system; your 9800x3d might handle 8-12 concurrently
 ocr_semaphore = asyncio.Semaphore(OCR_SEMAPHORE_LIMIT)
 
 def timestamp_to_date(timestamp_usec):
@@ -100,7 +100,7 @@ async def format_text_with_chatgpt(raw_text, session):
                     "Make the output as faithful to the original text as possible while cleaning up OCR artifacts. "
                     "Retain all line breaks, bullet points, and structure as closely as possible."
                 )},
-                {"role": "user", "content": f"Convert the following OCR text to Markdown, preserving all formatting:\n\n'''{raw_text}'''"}  # note: triple quotes for clarity
+                {"role": "user", "content": f"Convert the following OCR text to Markdown, preserving all formatting:\n\n'''{raw_text}'''"}  # Triple quotes for clarity
             ]
         }
 
@@ -172,45 +172,80 @@ async def create_markdown(note, attachments_folder, ocr_results, formatted_texts
     return markdown_content
 
 async def create_html(note, attachments_folder, ocr_results, formatted_texts):
-    """Generate an HTML string from note data using precomputed OCR & ChatGPT results."""
+    """
+    Generate an HTML string from note data in a panel view.
+    For each valid attachment, display a row with:
+      - Column 1: Original image
+      - Column 2: Raw OCR output
+      - Column 3: ChatGPT-formatted output (if enabled)
+    Each bit of content is collapsible (starting open).
+    """
     title = note.get("title", "Untitled")
     created_date = timestamp_to_date(note.get("createdTimestampUsec", 0))
     edited_date = timestamp_to_date(note.get("userEditedTimestampUsec", 0))
-    text_content = note.get("textContent", "").strip()
     labels = ", ".join(label.get("name", "") for label in note.get("labels", []))
-
-    attachment_images = ""
-    attachment_text = ""
-    image_count = 0
-
+    
+    # Prepare a list of valid attachment file paths
+    attachment_files = []
     for attachment in note.get("attachments", []):
         file_path = os.path.join(attachments_folder, attachment.get("filePath"))
         if os.path.exists(file_path):
-            image_count += 1
-            with open(file_path, "rb") as img_file:
-                base64_data = base64.b64encode(img_file.read()).decode("utf-8")
-                mime_type = "image/png" if file_path.endswith(".png") else "image/jpeg"
-                attachment_images += f"""
-                <p><strong>Image {image_count}:</strong> {os.path.basename(file_path)}</p>
-                <img src="data:{mime_type};base64,{base64_data}" alt="Embedded Image {image_count}" style="max-width:100%;"><br>
-                """
+            attachment_files.append(file_path)
 
-    for idx, (ocr_text, formatted_text) in enumerate(zip(ocr_results, formatted_texts), 1):
-        attachment_text += f"""
-        <details>
-            <summary><strong>OCR Extracted Text {idx}</strong></summary>
+    # Build rows for each attachment, aligning image, OCR, and ChatGPT data by index
+    rows_html = ""
+    for idx, file_path in enumerate(attachment_files, start=1):
+        # Build image column
+        with open(file_path, "rb") as img_file:
+            base64_data = base64.b64encode(img_file.read()).decode("utf-8")
+        mime_type = "image/png" if file_path.endswith(".png") else "image/jpeg"
+        image_html = f'<img src="data:{mime_type};base64,{base64_data}" alt="Embedded Image {idx}" style="max-width:100%;">'
+        
+        # Retrieve corresponding OCR and ChatGPT texts (if available)
+        ocr_text = ocr_results[idx-1] if idx-1 < len(ocr_results) else ""
+        formatted_text = formatted_texts[idx-1] if idx-1 < len(formatted_texts) else ""
+        
+        # Wrap each piece of content in a collapsible <details> element that starts open
+        image_details = f'''
+        <details open>
+            <summary>Image {idx}</summary>
+            {image_html}
+        </details>
+        '''
+        ocr_details = f'''
+        <details open>
+            <summary>OCR Output {idx}</summary>
             <pre>{ocr_text}</pre>
         </details>
-        """
+        '''
+        chatgpt_details = ""
         if USE_CHATGPT:
-            attachment_text += f"""
-            <details>
-                <summary><strong>ChatGPT Formatted Text {idx}</strong></summary>
+            chatgpt_details = f'''
+            <details open>
+                <summary>ChatGPT Output {idx}</summary>
                 <pre>{formatted_text}</pre>
             </details>
-            """
+            '''
+        
+        # Create a row that displays the three columns side by side.
+        if USE_CHATGPT:
+            row = f'''
+            <div class="attachment-row">
+                <div class="attachment-column">{image_details}</div>
+                <div class="attachment-column">{ocr_details}</div>
+                <div class="attachment-column">{chatgpt_details}</div>
+            </div>
+            '''
+        else:
+            row = f'''
+            <div class="attachment-row">
+                <div class="attachment-column">{image_details}</div>
+                <div class="attachment-column">{ocr_details}</div>
+            </div>
+            '''
+        rows_html += row
 
-    html_content = f"""
+    html_content = f'''
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -218,40 +253,61 @@ async def create_html(note, attachments_folder, ocr_results, formatted_texts):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{title}</title>
         <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: auto; padding: 20px; }}
-            h1 {{ color: #333; }}
-            pre {{ background: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }}
-            details {{ margin-bottom: 10px; }}
-            summary {{ cursor: pointer; font-size: 1.1em; font-weight: bold; color: #007bff; }}
-            summary:hover {{ text-decoration: underline; }}
+            body {{
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                max-width: 1200px;
+                margin: auto;
+                padding: 20px;
+            }}
+            h1 {{
+                color: #333;
+            }}
+            .meta-info {{
+                margin-bottom: 20px;
+            }}
+            .attachment-row {{
+                display: flex;
+                gap: 20px;
+                margin-bottom: 20px;
+            }}
+            .attachment-column {{
+                flex: 1;
+            }}
+            details {{
+                margin-bottom: 10px;
+            }}
+            summary {{
+                cursor: pointer;
+                font-size: 1.1em;
+                font-weight: bold;
+                color: #007bff;
+            }}
+            summary:hover {{
+                text-decoration: underline;
+            }}
+            pre {{
+                background: #f4f4f4;
+                padding: 10px;
+                border-radius: 5px;
+                overflow-x: auto;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }}
         </style>
     </head>
     <body>
         <h1>{title}</h1>
-        <p><strong>Created:</strong> {created_date}</p>
-        <p><strong>Last Edited:</strong> {edited_date}</p>
-        <p><strong>Labels:</strong> {labels}</p>
-        <hr>
-
-        <h2>Note Content</h2>
-        <p>{text_content}</p>
-
-        <hr>
-        <h2>Original Image Data</h2>
-        <details>
-            <summary><strong>View Embedded Images</strong></summary>
-            {attachment_images if image_count > 0 else "<p>No images found.</p>"}
-        </details>
-
-        <hr>
-        <h2>Extracted OCR & ChatGPT Data</h2>
-        {attachment_text}
-
+        <div class="meta-info">
+            <p><strong>Created:</strong> {created_date}</p>
+            <p><strong>Last Edited:</strong> {edited_date}</p>
+            <p><strong>Labels:</strong> {labels}</p>
+        </div>
+        {rows_html}
     </body>
     </html>
-    """.strip()
-
-    return html_content
+    '''
+    return html_content.strip()
 
 async def process_json(json_file, attachments_folder, session):
     """
