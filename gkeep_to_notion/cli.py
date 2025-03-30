@@ -8,6 +8,7 @@ import os
 import sys
 import asyncio
 import argparse
+import aiohttp
 from aiohttp import ClientSession
 
 from .config import Config
@@ -42,7 +43,10 @@ async def run(args):
     print(f"{'🤖 ChatGPT enabled' if Config.USE_CHATGPT else '🔤 OCR only'}")
     
     # Process notes
-    async with ClientSession() as session:
+    # Configure the aiohttp session with a longer timeout
+    connector = aiohttp.TCPConnector(limit=5)  # Limit concurrent connections to avoid overloading API
+    timeout = aiohttp.ClientTimeout(total=60)  # 60 second timeout
+    async with ClientSession(connector=connector, timeout=timeout) as session:
         if Config.DEBUG_MODE:
             print(f"Processing up to {Config.DEBUG_FILE_COUNT} files in debug mode...")
             count = 0
@@ -59,15 +63,25 @@ async def run(args):
                 print(f"Processed {count}/{Config.DEBUG_FILE_COUNT} files")
         else:
             print("Processing all files...")
-            tasks = [
-                process_note(
-                    os.path.join(Config.INPUT_FOLDER, file), 
-                    Config.ATTACHMENTS_FOLDER, 
-                    session
-                )
-                for file in os.listdir(Config.INPUT_FOLDER) if file.endswith(".json")
-            ]
-            await asyncio.gather(*tasks)
+            print(f"Found {len([f for f in os.listdir(Config.INPUT_FOLDER) if f.endswith('.json')])} JSON files to process")
+            
+            # Process files in manageable batches to avoid overwhelming the API
+            batch_size = 10
+            json_files = [f for f in os.listdir(Config.INPUT_FOLDER) if f.endswith(".json")]
+            
+            for i in range(0, len(json_files), batch_size):
+                batch = json_files[i:i+batch_size]
+                print(f"Processing batch {i//batch_size + 1}/{(len(json_files) + batch_size - 1)//batch_size}")
+                
+                tasks = [
+                    process_note(
+                        os.path.join(Config.INPUT_FOLDER, file), 
+                        Config.ATTACHMENTS_FOLDER, 
+                        session
+                    )
+                    for file in batch
+                ]
+                await asyncio.gather(*tasks)
     
     print("✅ Processing complete!")
 

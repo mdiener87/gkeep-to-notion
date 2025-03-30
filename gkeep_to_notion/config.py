@@ -20,7 +20,7 @@ class Config:
     """Configuration class for Google Keep to Notion converter."""
     
     # Debug settings
-    DEBUG_MODE = True  # When True, process only a few files for debugging
+    DEBUG_MODE = False  # When True, process only a few files for debugging
     DEBUG_FILE_COUNT = 15  # Number of files to process in debug mode
     
     # Paths
@@ -36,6 +36,10 @@ class Config:
     # Cache settings
     OCR_CACHE_FOLDER = "ocr_cache"
     CHATGPT_CACHE_FOLDER = "chatgpt_cache"
+    
+    # API settings
+    API_RETRY_ATTEMPTS = 3
+    API_RETRY_DELAY = 2  # seconds
     
     # OCR settings
     OCR_SEMAPHORE_LIMIT = 4  # Adjust based on your system

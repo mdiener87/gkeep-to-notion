@@ -34,22 +34,37 @@ async def process_attachment(file_path: str, session: ClientSession) -> Tuple[st
     # If ChatGPT formatting is enabled
     if Config.USE_CHATGPT:
         # Check cache for formatted text
+        file_basename = sanitize_filename(os.path.basename(file_path))
         chatgpt_cache_file = os.path.join(
             Config.CHATGPT_CACHE_FOLDER, 
-            sanitize_filename(os.path.basename(file_path)) + ".txt"
+            file_basename + ".txt"
         )
         
-        # If cache exists, use it
+        # If cache exists and is not empty, use it
         if os.path.exists(chatgpt_cache_file):
             with open(chatgpt_cache_file, "r", encoding="utf-8") as f:
                 formatted_text = f.read().strip()
-            if formatted_text:
+            if formatted_text and not formatted_text.startswith("❌"):
+                print(f"✓ Using cached ChatGPT result for {file_basename}")
                 return ocr_text, formatted_text
         
+        # If we have no ocr_text, don't bother calling the API
+        if not ocr_text.strip():
+            print(f"⚠️ No OCR text to process for {file_basename}, skipping ChatGPT")
+            return ocr_text, ocr_text
+            
         # Otherwise, get formatted text from ChatGPT and cache it
+        print(f"🤖 Requesting ChatGPT processing for {file_basename}")
         formatted_text = await format_text_with_chatgpt(ocr_text, session)
+        
+        # Check if the API call was successful
+        if formatted_text.startswith("❌"):
+            print(f"❌ ChatGPT processing failed for {file_basename}: {formatted_text}")
+        
+        # Cache the result (even if it failed, to avoid repeated failed calls)
         with open(chatgpt_cache_file, "w", encoding="utf-8") as f:
             f.write(formatted_text)
+        
         return ocr_text, formatted_text
     else:
         # If ChatGPT is disabled, use OCR text as formatted text
