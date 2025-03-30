@@ -6,7 +6,6 @@
 
 <p align="center">Convert Google Keep notes to Markdown and HTML with OCR and ChatGPT support.</p>
 
-
 # Google Keep to Notion Converter
 
 Convert your exported Google Keep notes (from Google Takeout) into clean, import-ready Markdown and HTML files for use in Notion — complete with OCR image processing and optional ChatGPT formatting.
@@ -41,48 +40,93 @@ pip install -r requirements.txt
 ```
 
 ### 3. Set your OpenAI API key (optional)
+```
 export OPENAI_API_KEY=your-openai-key
+```
 
-### 4.  Export your Google Keep notes
+### 4. Export your Google Keep notes
 - Go to Google Takeout
 - Export only Google Keep
 - Extract the .zip file and copy the Keep/ folder into the root of this project
 
 ### 5. Run the script
-`python translate_gkeep.py`
+```
+python main.py
+```
 
+## Command-line Arguments
 
-### Output 
-output_markdown/
-output_html/
+The script now supports various command-line arguments:
 
-### Configuration Options
-DEBUG_MODE = True        # Limit processing to a few files
-DEBUG_FILE_COUNT = 15    # Number of notes to process in debug mode
-USE_CHATGPT = False      # Enable ChatGPT Markdown formatting
+```
+python main.py --help
+```
 
-### Requirements
-Python 3.10+
+Options:
+- `--debug`: Enable debug mode (process limited number of files)
+- `--count`: Number of files to process in debug mode (default: 15)
+- `--ocr-only`: Disable ChatGPT formatting (OCR only)
+- `--input-folder`: Folder containing Google Keep JSON files (default: "Keep")
+- `--attachments-folder`: Folder containing Google Keep attachments (default: "Keep")
 
-Tesseract OCR installed and available in your system PATH
+Examples:
+```
+# Process only 5 files in debug mode
+python main.py --debug --count 5
 
-OpenAI API key (if USE_CHATGPT = True)
+# Process without ChatGPT formatting
+python main.py --ocr-only
 
-### Dependencies
-Installable via pip install -r requirements.txt:
+# Specify custom folders
+python main.py --input-folder my_keep_json --attachments-folder my_keep_attachments
+```
+
+## Output 
+
+The script generates output in two folders:
+- `output_markdown/`: Markdown files organized by labels
+- `output_html/`: HTML files with interactive view of original images, OCR text, and formatted text
+
+## Requirements
+
+- Python 3.10+
+- Tesseract OCR installed and available in your system PATH
+- OpenAI API key (if ChatGPT formatting is enabled)
+
+## Dependencies
+
+Installable via `pip install -r requirements.txt`:
 - aiohttp
 - openai
 - pytesseract
 - pillow
 - python-dotenv
 
-### Caching
-To avoid repeated OCR and API calls, the script saves intermediate results to:
+## Caching
 
-cache/ocr/ – Raw OCR output
-cache/chatgpt/ – ChatGPT-formatted Markdown
+To avoid repeated OCR and API calls, the script saves intermediate results to:
+- `ocr_cache/`: Raw OCR output
+- `chatgpt_cache/`: ChatGPT-formatted Markdown
 
 To clear the cache, simply delete those folders before re-running.
+
+## Project Structure
+
+The project has been refactored into a proper Python package structure:
+
+```
+gkeep_to_notion/
+├── __init__.py              # Package initialization
+├── cli.py                   # Command-line interface
+├── config.py                # Configuration settings
+├── utils.py                 # Utility functions
+├── ocr.py                   # OCR functionality
+├── api.py                   # ChatGPT API integration
+├── processors.py            # Note and attachment processing
+└── output.py                # Output generation (Markdown, HTML)
+```
+
+The main entry point is `main.py` in the project root.
 
 ## License
 
