@@ -86,15 +86,10 @@ async def process_note(json_file: str, attachments_folder: str, session: ClientS
             attachment_paths.append(file_path)
 
     # Process all attachments
-    if Config.USE_CHATGPT:
-        tasks = [process_attachment(file_path, session) for file_path in attachment_paths]
-        results = await asyncio.gather(*tasks)
-        ocr_results = [r[0] for r in results]
-        formatted_texts = [r[1] for r in results]
-    else:
-        tasks = [ocr_image(file_path) for file_path in attachment_paths]
-        ocr_results = await asyncio.gather(*tasks)
-        formatted_texts = ocr_results
+    tasks = [process_attachment(file_path, session) for file_path in attachment_paths]
+    results = await asyncio.gather(*tasks)
+    ocr_results = [r[0] for r in results]
+    formatted_texts = [r[1] for r in results]
 
     # Generate and save Markdown content
     markdown_content = await create_markdown(note, attachments_folder, ocr_results, formatted_texts)
@@ -105,7 +100,7 @@ async def process_note(json_file: str, attachments_folder: str, session: ClientS
     print(f"✅ Markdown generated: {markdown_file}")
 
     # Generate and save HTML content
-    html_content = await create_html(note, attachments_folder, ocr_results, formatted_texts)
+    html_content = await create_html(note, attachments_folder, ocr_results, formatted_texts, attachment_paths)
     html_file = os.path.join(html_folder, f"{title}.html")
     with open(html_file, "w", encoding="utf-8") as html_file_obj:
         html_file_obj.write(html_content)

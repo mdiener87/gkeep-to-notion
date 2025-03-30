@@ -44,18 +44,19 @@ async def run(args):
     # Process notes
     async with ClientSession() as session:
         if Config.DEBUG_MODE:
-            print(f"Processing up to {Config.DEBUG_FILE_COUNT} files...")
+            print(f"Processing up to {Config.DEBUG_FILE_COUNT} files in debug mode...")
             count = 0
-            for file in os.listdir(Config.INPUT_FOLDER):
-                if file.endswith(".json"):
-                    await process_note(
-                        os.path.join(Config.INPUT_FOLDER, file), 
-                        Config.ATTACHMENTS_FOLDER, 
-                        session
-                    )
-                    count += 1
-                    if count >= Config.DEBUG_FILE_COUNT:
-                        break  # Stop after processing DEBUG_FILE_COUNT files
+            # Get a list of all JSON files first
+            json_files = [f for f in os.listdir(Config.INPUT_FOLDER) if f.endswith(".json")]
+            # Process only up to DEBUG_FILE_COUNT files
+            for file in json_files[:Config.DEBUG_FILE_COUNT]:
+                await process_note(
+                    os.path.join(Config.INPUT_FOLDER, file), 
+                    Config.ATTACHMENTS_FOLDER, 
+                    session
+                )
+                count += 1
+                print(f"Processed {count}/{Config.DEBUG_FILE_COUNT} files")
         else:
             print("Processing all files...")
             tasks = [
@@ -84,30 +85,32 @@ def parse_args():
     
     parser.add_argument(
         "--debug", 
-        action="store_true", 
+        action="store_true",
+        default=Config.DEBUG_MODE,
         help="Enable debug mode (process limited number of files)"
     )
     parser.add_argument(
         "--count", 
         type=int, 
-        default=15, 
+        default=Config.DEBUG_FILE_COUNT, 
         help="Number of files to process in debug mode"
     )
     parser.add_argument(
         "--ocr-only", 
-        action="store_true", 
+        action="store_true",
+        default=not Config.USE_CHATGPT,
         help="Disable ChatGPT formatting (OCR only)"
     )
     parser.add_argument(
         "--input-folder", 
         type=str, 
-        default="Keep", 
+        default=Config.INPUT_FOLDER, 
         help="Folder containing Google Keep JSON files"
     )
     parser.add_argument(
         "--attachments-folder", 
         type=str, 
-        default="Keep", 
+        default=Config.ATTACHMENTS_FOLDER, 
         help="Folder containing Google Keep attachments"
     )
     

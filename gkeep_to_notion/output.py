@@ -8,6 +8,7 @@ import os
 import base64
 from typing import Dict, List, Any
 
+from .config import Config
 from .utils import timestamp_to_date
 
 
@@ -37,8 +38,8 @@ async def create_markdown(note: Dict[str, Any], attachments_folder: str,
     for ocr_text, formatted_text in zip(ocr_results, formatted_texts):
         attachment_text += f"\n\n## OCR Extracted Text\n"
         attachment_text += f"### Raw OCR Output:\n```\n{ocr_text}\n```\n"
-        if formatted_text != ocr_text:  # Only add formatted text if it's different
-            attachment_text += f"### Formatted Output:\n{formatted_text}\n"
+        if formatted_text != ocr_text and Config.USE_CHATGPT:  # Only add ChatGPT text if enabled and different
+            attachment_text += f"### ChatGPT Output:\n{formatted_text}\n"
 
     # Combine all sections into a Markdown document
     markdown_content = f"""
@@ -60,7 +61,8 @@ async def create_markdown(note: Dict[str, Any], attachments_folder: str,
 
 
 async def create_html(note: Dict[str, Any], attachments_folder: str, 
-                     ocr_results: List[str], formatted_texts: List[str]) -> str:
+                     ocr_results: List[str], formatted_texts: List[str],
+                     attachment_paths: List[str]) -> str:
     """
     Generate an HTML string from note data in a panel view.
     
@@ -85,12 +87,8 @@ async def create_html(note: Dict[str, Any], attachments_folder: str,
     edited_date = timestamp_to_date(note.get("userEditedTimestampUsec", 0))
     labels = ", ".join(label.get("name", "") for label in note.get("labels", []))
     
-    # Prepare a list of valid attachment file paths
-    attachment_files = []
-    for attachment in note.get("attachments", []):
-        file_path = os.path.join(attachments_folder, attachment.get("filePath"))
-        if os.path.exists(file_path):
-            attachment_files.append(file_path)
+    # Use the attachment paths provided
+    attachment_files = attachment_paths
 
     # Build rows for each attachment, aligning image, OCR, and ChatGPT data by index
     rows_html = ""
@@ -121,10 +119,10 @@ async def create_html(note: Dict[str, Any], attachments_folder: str,
         '''
         
         chatgpt_details = ""
-        if formatted_text != ocr_text:  # Only show ChatGPT output if different from OCR
+        if formatted_text != ocr_text and Config.USE_CHATGPT:  # Only show ChatGPT output if enabled and different
             chatgpt_details = f'''
             <details open>
-                <summary>Formatted Output {idx}</summary>
+                <summary>ChatGPT Output {idx}</summary>
                 <pre>{formatted_text}</pre>
             </details>
             '''
