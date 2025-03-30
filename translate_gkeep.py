@@ -28,12 +28,14 @@ USE_CHATGPT = False  # Set to True to enable ChatGPT processing, False for OCR o
 # OpenAI API Key (make sure this is set in your environment)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Define OCR cache folder and create if it doesn't exist
+# Define OCR and ChatGPT cache folders (file-based cache)
 OCR_CACHE_FOLDER = "ocr_cache"
 os.makedirs(OCR_CACHE_FOLDER, exist_ok=True)
+CHATGPT_CACHE_FOLDER = "chatgpt_cache"
+os.makedirs(CHATGPT_CACHE_FOLDER, exist_ok=True)
 
 # Define semaphore for limiting OCR concurrency (adjust the limit as needed)
-OCR_SEMAPHORE_LIMIT = 4
+OCR_SEMAPHORE_LIMIT = 6
 ocr_semaphore = asyncio.Semaphore(OCR_SEMAPHORE_LIMIT)
 
 def timestamp_to_date(timestamp_usec):
@@ -51,7 +53,6 @@ async def ocr_image(image_path):
     Checks for a cached OCR result first; if not available, performs OCR
     (using a semaphore to limit concurrency) and then caches the result.
     """
-    # Create a cache filename based on the image's base name
     cache_file = os.path.join(OCR_CACHE_FOLDER, sanitize_filename(os.path.basename(image_path)) + ".txt")
     if os.path.exists(cache_file):
         with open(cache_file, "r", encoding="utf-8") as f:
@@ -59,7 +60,6 @@ async def ocr_image(image_path):
         if cached_text:
             return cached_text
 
-    # If not cached, limit the OCR process with the semaphore
     async with ocr_semaphore:
         try:
             img = Image.open(image_path)
@@ -77,7 +77,6 @@ async def ocr_image(image_path):
             if not text:
                 print(f"Warning: No OCR text extracted from {image_path}")
 
-            # Cache the result for future runs
             with open(cache_file, "w", encoding="utf-8") as f:
                 f.write(text)
 
@@ -89,7 +88,6 @@ async def ocr_image(image_path):
 async def format_text_with_chatgpt(raw_text, session):
     """
     Send OCR text to OpenAI GPT API for faithful Markdown conversion.
-    The API is used only if USE_CHATGPT is enabled.
     """
     try:
         headers = {"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"}
@@ -102,7 +100,7 @@ async def format_text_with_chatgpt(raw_text, session):
                     "Make the output as faithful to the original text as possible while cleaning up OCR artifacts. "
                     "Retain all line breaks, bullet points, and structure as closely as possible."
                 )},
-                {"role": "user", "content": f"Convert the following OCR text to Markdown, preserving all formatting:\n\n'''{raw_text}'''"}
+                {"role": "user", "content": f"Convert the following OCR text to Markdown, preserving all formatting:\n\n'''{raw_text}'''"}  # note: triple quotes for clarity
             ]
         }
 
@@ -119,6 +117,28 @@ async def format_text_with_chatgpt(raw_text, session):
         print(f"❌ Error during API call: {e}")
         return "❌ API request failed"
 
+async def process_attachment(file_path, session):
+    """
+    Process a single attachment:
+      - Get OCR text using Tesseract (with caching and semaphore limits)
+      - If ChatGPT is enabled, check the cache for formatted text; if not present, call the API and cache the result.
+    Returns a tuple: (ocr_text, formatted_text)
+    """
+    ocr_text = await ocr_image(file_path)
+    if USE_CHATGPT:
+        chatgpt_cache_file = os.path.join(CHATGPT_CACHE_FOLDER, sanitize_filename(os.path.basename(file_path)) + ".txt")
+        if os.path.exists(chatgpt_cache_file):
+            with open(chatgpt_cache_file, "r", encoding="utf-8") as f:
+                formatted_text = f.read().strip()
+            if formatted_text:
+                return ocr_text, formatted_text
+        formatted_text = await format_text_with_chatgpt(ocr_text, session)
+        with open(chatgpt_cache_file, "w", encoding="utf-8") as f:
+            f.write(formatted_text)
+        return ocr_text, formatted_text
+    else:
+        return ocr_text, ocr_text
+
 async def create_markdown(note, attachments_folder, ocr_results, formatted_texts):
     """Generate a Markdown string from note data using precomputed OCR & ChatGPT results."""
     title = note.get("title", "Untitled")
@@ -127,16 +147,13 @@ async def create_markdown(note, attachments_folder, ocr_results, formatted_texts
     text_content = note.get("textContent", "").strip()
     labels = ", ".join(label.get("name", "") for label in note.get("labels", []))
 
-    # Handle attachments (OCR processing)
     attachment_text = ""
-    
     for ocr_text, formatted_text in zip(ocr_results, formatted_texts):
         attachment_text += f"\n\n## OCR Extracted Text\n"
         attachment_text += f"### Raw OCR Output:\n```\n{ocr_text}\n```\n"
         if USE_CHATGPT:
             attachment_text += f"### ChatGPT Formatted Output:\n{formatted_text}\n"
 
-    # Combine content into Markdown
     markdown_content = f"""
     # {title}
 
@@ -162,7 +179,6 @@ async def create_html(note, attachments_folder, ocr_results, formatted_texts):
     text_content = note.get("textContent", "").strip()
     labels = ", ".join(label.get("name", "") for label in note.get("labels", []))
 
-    # Handle attachments (Base64-encoded images)
     attachment_images = ""
     attachment_text = ""
     image_count = 0
@@ -179,7 +195,6 @@ async def create_html(note, attachments_folder, ocr_results, formatted_texts):
                 <img src="data:{mime_type};base64,{base64_data}" alt="Embedded Image {image_count}" style="max-width:100%;"><br>
                 """
 
-    # Append collapsible sections for OCR & ChatGPT data
     for idx, (ocr_text, formatted_text) in enumerate(zip(ocr_results, formatted_texts), 1):
         attachment_text += f"""
         <details>
@@ -195,7 +210,6 @@ async def create_html(note, attachments_folder, ocr_results, formatted_texts):
             </details>
             """
 
-    # Combine everything into an HTML structure
     html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -243,8 +257,7 @@ async def process_json(json_file, attachments_folder, session):
     """
     Process a single JSON file:
       - Load note data,
-      - Run OCR on all attachments (with caching and semaphore limits),
-      - Optionally format the OCR text using ChatGPT,
+      - For each attachment, perform OCR and (if enabled) ChatGPT formatting using independent caches,
       - Generate and save Markdown and HTML outputs.
     """
     with open(json_file, "r", encoding="utf-8") as file:
@@ -253,43 +266,37 @@ async def process_json(json_file, attachments_folder, session):
     labels = [label.get("name", "") for label in note.get("labels", [])]
     label_folder = "_".join(labels) if labels else "Unlabeled"
 
-    # Separate root folders for Markdown and HTML output
     markdown_folder = os.path.join("output_markdown", label_folder)
     html_folder = os.path.join("output_html", label_folder)
     os.makedirs(markdown_folder, exist_ok=True)
     os.makedirs(html_folder, exist_ok=True)
 
-    # Process attachments (OCR)
-    ocr_tasks = []
+    attachment_paths = []
     for attachment in note.get("attachments", []):
         file_path = os.path.join(attachments_folder, attachment.get("filePath"))
         if os.path.exists(file_path):
-            ocr_tasks.append(ocr_image(file_path))
+            attachment_paths.append(file_path)
 
-    # Run OCR tasks concurrently (with caching and semaphore limiting in ocr_image)
-    ocr_results = await asyncio.gather(*ocr_tasks)
-
-    # Format OCR text with ChatGPT if enabled, otherwise reuse raw OCR results
     if USE_CHATGPT:
-        chatgpt_tasks = [format_text_with_chatgpt(text, session) for text in ocr_results]
-        formatted_texts = await asyncio.gather(*chatgpt_tasks)
+        tasks = [process_attachment(file_path, session) for file_path in attachment_paths]
+        results = await asyncio.gather(*tasks)
+        ocr_results = [r[0] for r in results]
+        formatted_texts = [r[1] for r in results]
     else:
+        tasks = [ocr_image(file_path) for file_path in attachment_paths]
+        ocr_results = await asyncio.gather(*tasks)
         formatted_texts = ocr_results
 
-    # Generate Markdown and HTML content
     markdown_content = await create_markdown(note, attachments_folder, ocr_results, formatted_texts)
     html_content = await create_html(note, attachments_folder, ocr_results, formatted_texts)
 
-    # Sanitize title for filenames
     title = sanitize_filename(note.get("title", "Untitled"))
 
-    # Save Markdown output
     markdown_file = os.path.join(markdown_folder, f"{title}.md")
     with open(markdown_file, "w", encoding="utf-8") as md_file:
         md_file.write(markdown_content)
     print(f"✅ Markdown generated: {markdown_file}")
 
-    # Save HTML output
     html_file = os.path.join(html_folder, f"{title}.html")
     with open(html_file, "w", encoding="utf-8") as html_file_obj:
         html_file_obj.write(html_content)
