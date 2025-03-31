@@ -163,10 +163,13 @@ async def create_html(note: Dict[str, Any], attachments_folder: str,
         
         chatgpt_details = ""
         if formatted_text != ocr_text and Config.USE_CHATGPT:  # Only show ChatGPT output if enabled and different
+            # Render Markdown as HTML instead of showing raw Markdown
             chatgpt_details = f'''
             <details open>
                 <summary>ChatGPT Output {idx}</summary>
-                <pre>{formatted_text}</pre>
+                <div class="markdown-content">
+                    {formatted_text}
+                </div>
             </details>
             '''
         
@@ -189,9 +192,11 @@ async def create_html(note: Dict[str, Any], attachments_folder: str,
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{title}</title>
+        <!-- Add a basic Markdown CSS library -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
         <style>
             body {{
-                font-family: Arial, sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
                 line-height: 1.6;
                 max-width: 1200px;
                 margin: auto;
@@ -231,15 +236,18 @@ async def create_html(note: Dict[str, Any], attachments_folder: str,
                 display: flex;
                 gap: 20px;
                 margin-bottom: 20px;
+                flex-wrap: wrap; /* Allow wrapping on smaller screens */
             }}
             .attachment-column {{
                 flex: 1;
+                min-width: 300px; /* Ensure minimum width on small screens */
                 background-color: #f9f9f9;
-                padding: 10px;
+                padding: 15px;
                 border-radius: 5px;
+                margin-bottom: 15px;
             }}
             details {{
-                margin-bottom: 10px;
+                margin-bottom: 15px;
             }}
             summary {{
                 cursor: pointer;
@@ -265,6 +273,108 @@ async def create_html(note: Dict[str, Any], attachments_folder: str,
                 height: 1px;
                 background-color: #ddd;
                 margin: 30px 0;
+            }}
+            /* Style the markdown content */
+            .markdown-content {{
+                padding: 15px;
+                background: white;
+                border-radius: 5px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }}
+            /* Apply GitHub Markdown styles but restrict to our container */
+            .markdown-content {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            }}
+            .markdown-content h1, 
+            .markdown-content h2,
+            .markdown-content h3,
+            .markdown-content h4,
+            .markdown-content h5,
+            .markdown-content h6 {{
+                margin-top: 24px;
+                margin-bottom: 16px;
+                font-weight: 600;
+                line-height: 1.25;
+            }}
+            .markdown-content h1 {{
+                font-size: 2em;
+                border-bottom: 1px solid #eaecef;
+                padding-bottom: .3em;
+            }}
+            .markdown-content h2 {{
+                font-size: 1.5em;
+                border-bottom: 1px solid #eaecef;
+                padding-bottom: .3em;
+            }}
+            .markdown-content p {{
+                margin-top: 0;
+                margin-bottom: 16px;
+            }}
+            .markdown-content ul, 
+            .markdown-content ol {{
+                padding-left: 2em;
+                margin-top: 0;
+                margin-bottom: 16px;
+            }}
+            .markdown-content code {{
+                padding: .2em .4em;
+                margin: 0;
+                font-size: 85%;
+                background-color: rgba(27,31,35,.05);
+                border-radius: 3px;
+                font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            }}
+            .markdown-content pre {{
+                word-wrap: normal;
+                padding: 16px;
+                overflow: auto;
+                font-size: 85%;
+                line-height: 1.45;
+                background-color: #f6f8fa;
+                border-radius: 3px;
+            }}
+            .markdown-content pre > code {{
+                padding: 0;
+                margin: 0;
+                font-size: 100%;
+                word-break: normal;
+                white-space: pre;
+                background: transparent;
+                border: 0;
+            }}
+            .markdown-content a {{
+                color: #0366d6;
+                text-decoration: none;
+            }}
+            .markdown-content a:hover {{
+                text-decoration: underline;
+            }}
+            .markdown-content blockquote {{
+                padding: 0 1em;
+                color: #6a737d;
+                border-left: .25em solid #dfe2e5;
+                margin: 0 0 16px 0;
+            }}
+            .markdown-content table {{
+                display: block;
+                width: 100%;
+                overflow: auto;
+                margin-top: 0;
+                margin-bottom: 16px;
+                border-spacing: 0;
+                border-collapse: collapse;
+            }}
+            .markdown-content table th,
+            .markdown-content table td {{
+                padding: 6px 13px;
+                border: 1px solid #dfe2e5;
+            }}
+            .markdown-content table tr {{
+                background-color: #fff;
+                border-top: 1px solid #c6cbd1;
+            }}
+            .markdown-content table tr:nth-child(2n) {{
+                background-color: #f6f8fa;
             }}
         </style>
     </head>
