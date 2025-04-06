@@ -43,7 +43,11 @@ const config = {
     maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
     retryDelay: parseInt(process.env.RETRY_DELAY || '1000', 10),
     requestsPerSecond: parseInt(process.env.REQUESTS_PER_SECOND || '3', 10),
-  }
+  },
+  
+  // Runtime options
+  dryRun: process.env.DRY_RUN === 'true',
+  verbose: process.env.VERBOSE === 'true'
 };
 
 export default config;

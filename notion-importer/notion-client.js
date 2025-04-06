@@ -7,11 +7,59 @@ import { processMarkdownContent } from './markdown-to-notion.js';
  * @returns {Client} Configured Notion API client
  */
 export function initNotionClient() {
+  // In dry-run mode, we'll create a mock client
+  if (config.dryRun) {
+    // Return a mock client that simulates the API calls
+    return createMockNotionClient();
+  }
+  
+  // Create an actual Notion client
   const notion = new Client({
     auth: config.notion.apiKey,
   });
   
   return notion;
+}
+
+/**
+ * Create a mock Notion client for dry-run mode
+ * @returns {Object} Mock Notion client
+ */
+function createMockNotionClient() {
+  return {
+    pages: {
+      create: async (params) => {
+        // Simulate API latency
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Return a fake page object
+        return {
+          id: `dry-run-page-${Math.random().toString(36).substring(2, 10)}`,
+          created_time: new Date().toISOString(),
+          last_edited_time: new Date().toISOString(),
+          url: 'https://notion.so/dry-run-page',
+          properties: params.properties || {},
+        };
+      },
+    },
+    blocks: {
+      children: {
+        append: async (params) => {
+          // Simulate API latency
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Return a fake response
+          return {
+            has_more: false,
+            results: params.children.map((child, index) => ({
+              id: `dry-run-block-${index}-${Math.random().toString(36).substring(2, 10)}`,
+              type: child.type,
+            })),
+          };
+        },
+      },
+    },
+  };
 }
 
 /**
