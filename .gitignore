@@ -21,3 +21,6 @@ translate_gkeep_mk*.py
 __pycache__/
 *.py[cod]
 *.log
+
+# zip
+.zip
