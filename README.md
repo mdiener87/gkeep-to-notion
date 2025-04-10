@@ -128,6 +128,11 @@ gkeep_to_notion/
 
 The main entry point is `main.py` in the project root.
 
+
+## Notion Importer
+The project also includes notion-importer, a Nodejs project to directly push translated notes into Notion utilizing the Notion API. 
+This ensures that all imported pages maintain their correct relative organization and sort.
+
 ## License
 
 [MIT](LICENSE)

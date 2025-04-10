@@ -1,8 +1,49 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
 # Virtual environments
 venv/
 .env/
+env/
+ENV/
+env.bak/
+venv.bak/
 
-# Output data
+# Environment variables
+.env
+.venv
+
+# IDE settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project-specific output
 cache/
 output_html*/
 output_markdown/
@@ -10,16 +51,16 @@ Keep/
 gkeep/
 archive/
 *cache/
+output_markdown.zip
 
 # Original export
 archive_browser.html
 
 # Script drafts / earlier versions
 translate_gkeep_mk*.py
+translate_gkeep.py.bak
 
-# Python cache
-__pycache__/
-*.py[cod]
+# Logs
 *.log
 
 # zip
